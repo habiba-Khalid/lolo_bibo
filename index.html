@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Beach Quest 🌅</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Press+Start+2P&family=Quicksand:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:#1b1420;overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;font-family:'Quicksand',system-ui,sans-serif;color:#fff7ea}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center}
+#wrap{position:relative;width:min(100vw,calc(100svh*16/9));aspect-ratio:16/9}
+canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+#hud{position:absolute;left:3%;top:5%;font:clamp(9px,2.6vw,15px) 'Press Start 2P',monospace;color:#ffe27a;text-shadow:2px 2px #3b2a1a}
+#hint{display:none;font-size:13px;opacity:.7;margin-bottom:8px}
+@media (orientation:portrait){#hint{display:block}}
+.ctl{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;gap:14px}
+#pad{left:16px}#jmp{right:16px}
+.b{width:68px;height:68px;border-radius:50%;background:rgba(255,235,205,.22);border:2px solid rgba(255,235,205,.5);display:flex;align-items:center;justify-content:center;font:20px 'Press Start 2P',monospace;color:#fff7ea;backdrop-filter:blur(4px)}
+.b.on{background:rgba(255,200,120,.5)}
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(27,20,32,.72);backdrop-filter:blur(6px);z-index:5;padding:20px;box-sizing:border-box}
+.ov.hide{display:none}
+.card{max-width:520px;max-height:88svh;overflow-y:auto;scrollbar-width:none;touch-action:pan-y;text-align:center;padding:clamp(16px,3.5vh,26px);border-radius:26px;background:rgba(40,28,44,.7);border:1px solid rgba(255,235,205,.3);box-shadow:0 10px 40px rgba(0,0,0,.4)}
+h1{font-family:'Caveat','Segoe Script',cursive;font-size:clamp(24px,min(7vh,9vw),54px);margin:0 0 8px;text-shadow:0 2px 14px rgba(255,160,90,.55)}
+.card::-webkit-scrollbar{display:none}
+p{margin:0 0 min(12px,1.6vh);line-height:1.5;font-size:clamp(11px,min(2.5vh,4vw),18px)}
+.sig{font-family:'Caveat','Segoe Script',cursive;font-size:clamp(20px,5vh,28px)}
+button.go{font:12px 'Press Start 2P',monospace;padding:14px 20px;border-radius:12px;border:0;background:#ffb85c;color:#3b2a1a;margin-top:6px}
+#toast{position:fixed;top:14%;left:50%;transform:translateX(-50%);background:rgba(40,28,44,.85);padding:10px 16px;border-radius:14px;font-size:14px;opacity:0;transition:opacity .4s;z-index:4;text-align:center;width:max-content;max-width:86vw}
+</style>
+</head>
+<body>
+<div id="hint">Tip: turn your phone sideways for a bigger view</div>
+<div id="wrap"><canvas id="g"></canvas><div id="hud">★ 0/12</div></div>
+<div class="ctl" id="pad"><div class="b" data-k="l">◀</div><div class="b" data-k="r">▶</div></div>
+<div class="ctl" id="jmp"><div class="b" data-k="j">A</div></div>
+<div id="toast"></div>
+
+<div class="ov" id="start"><div class="card">
+  <h1>Beach Quest</h1>
+  <p>Hi Lolo! Something is hiding on this beach. Collect all 12 shells to unlock a birthday surprise.</p>
+  <p style="opacity:.75;font-size:14px">◀ ▶ to run · A to jump · squash the crabs! You have 3 lives ♥</p>
+  <button class="go" id="play">START</button>
+</div></div>
+
+<div class="ov hide" id="win"><div class="card">
+  <h1>Happy 20th Birthday, Lolo!</h1>
+  <p>Wishing you more and more happy years, getting everything you want in life, building a big career, and making every wish a reality.</p>
+  <p>Wishing us many more years of staying close, seeing each other more, and traveling the world together. I can’t wait to finally see you, and I’m saving you the biggest hug until then.</p>
+  <p>And finally, wishing you many more years of being a cat mom and having more and more cute, healthy cats!</p>
+  <p class="sig">With love, Bibo</p>
+  <button class="go" id="again">PLAY AGAIN</button>
+</div></div>
+
+<div class="ov hide" id="over"><div class="card">
+  <h1>Oh no, the crabs got her!</h1>
+  <p>Out of lives. Don’t worry, the shells are waiting. Try again?</p>
+  <button class="go" id="retry">TRY AGAIN</button>
+</div></div>
+
+<script>
+const C=document.getElementById('g'),ctx=C.getContext('2d');C.width=256;C.height=144;
+const LW=3280,G=120,N=12;
+const keys={l:0,r:0,j:0};
+const kmap={ArrowLeft:'l',ArrowRight:'r',ArrowUp:'j',' ':'j',a:'l',d:'r',w:'j'};
+addEventListener('keydown',e=>{if(kmap[e.key]){keys[kmap[e.key]]=1;e.preventDefault()}});
+addEventListener('keyup',e=>{if(kmap[e.key])keys[kmap[e.key]]=0});
+document.querySelectorAll('.b').forEach(b=>{
+  const k=b.dataset.k,on=e=>{e.preventDefault();keys[k]=1;b.classList.add('on');try{b.setPointerCapture(e.pointerId)}catch(_){}},off=()=>{keys[k]=0;b.classList.remove('on')};
+  b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+});
+let ac;function beep(f,d=.08,type='square'){try{const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;g.gain.value=.05;o.connect(g);g.connect(ac.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);o.stop(ac.currentTime+d)}catch(_){}}
+
+// ---------- level ----------
+let plats,stars,crabs,P,cam,state,f,got,conf,toastT,lives;
+function reset(){
+  plats=[{x:-1e9,y:G,w:2e9}];stars=[];crabs=[];
+  const H=[92,86,94,88];
+  for(let i=0;i<N;i++){
+    const px=180+i*250,w=32+(i%3)*6;let y=H[i%4];
+    if(i%3==2){plats.push({x:px-34,y:96,w:28});y=72}
+    plats.push({x:px,y,w});
+    stars.push({x:px+w/2-3,y:y-17,t:0,ph:i});
+    crabs.push({x:px+120,min:px+70,max:px+180,d:1,alive:1,sp:.6+(i%3)*.12});
+    if(i%2==1)crabs.push({x:px-10,min:px-50,max:px+20,d:-1,alive:1,sp:.7});
+  }
+  P={x:20,y:G-14,vx:0,vy:0,kx:0,face:1,ground:1,hurt:0};
+  cam=0;f=0;got=0;lives=3;conf=[];state='title';hud();
+}
+function hud(){document.getElementById('hud').innerHTML='🐚 '+got+'/'+N+' <span style="color:#ff5a6e;margin-left:6px">'+'♥'.repeat(Math.max(0,lives))+'</span>'}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>e.style.opacity=0,2200)}
+
+// ---------- sprites ----------
+const pal={h:'#b1b1b5',s:'#f3d6c0',j:'#9fd0f5',k:'#85858b',p:'#3f5f95',w:'#f4f4f4',e:'#1c1416',c:'#f7cf3e',C:'#d49a1a',z:'#fff0a8',y:'#ffd84a',Y:'#fff2a0',r:'#d9443a',R:'#ff7a5c'};
+const HERO=['..hhhhhh..','.hhhhhhhh.','.hhhsssssh','.hhhssessh','.hhhsssssh','..hkkkkkh.','.jjkkkkjj.','jjjjkkjjjj','jjjjkkjjjj','.jjjjjjjj.','.jjjjjjjj.','..pppppp..'];
+const LEG=[['..pp..pp..','..ww..ww..'],['..ppp.pp..','.www..ww..']];
+const STAR=['.c.c.c.c.','ccccccccc','cCcCcCcCc','cCcCcCcCc','.cCcCcCc.','..cCcCc..','..zzzzz..'];
+function spr(rows,x,y,flip,w){x=Math.round(x);y=Math.round(y);rows.forEach((r,j)=>{for(let i=0;i<r.length;i++){const c=r[flip?r.length-1-i:i];if(c!='.'){ctx.fillStyle=pal[c];ctx.fillRect(x+i,y+j,1,1)}}})}
+function rect(c,x,y,w,h){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h)}
+
+// ---------- update ----------
+function update(){
+  f++;
+  const a=(keys.r-keys.l);
+  if(a)P.face=a;
+  P.vx=a*1.4+P.kx;P.kx*=.88;
+  if(keys.j&&P.ground){P.vy=-5.2;P.ground=0;beep(520,.1)}
+  const prev=P.y+14;
+  P.vy+=.3;P.x=Math.max(0,Math.min(LW-8,P.x+P.vx));P.y+=P.vy;
+  P.ground=0;
+  if(P.vy>=0){for(const p of plats){if(prev<=p.y+.1&&P.y+14>=p.y&&P.x+8>p.x&&P.x<p.x+p.w){P.y=p.y-14;P.vy=0;P.ground=1;break}}}
+  if(P.hurt>0)P.hurt--;
+  stars.forEach(s=>{if(!s.got&&Math.abs(P.x+4-(s.x+3))<8&&Math.abs(P.y+7-(s.y+3))<10){s.got=1;got++;hud();beep(880,.08);setTimeout(()=>beep(1175,.12),70)}});
+  crabs.forEach(c=>{
+    if(!c.alive)return;
+    c.x+=c.d*c.sp;if(c.x>c.max||c.x<c.min)c.d*=-1;
+    if(P.x+8>c.x&&P.x<c.x+10&&P.y+14>G-6&&P.y<G){
+      if(P.vy>0&&prev<=G-4){c.alive=0;P.vy=-3.6;beep(300,.1)}
+      else if(!P.hurt){P.hurt=70;P.kx=(P.x<c.x?-1:1)*2.6;P.vy=-2.6;beep(140,.15,'sawtooth');lives--;hud();if(lives<=0){state='over';setTimeout(()=>document.getElementById('over').classList.remove('hide'),700)}}
+    }
+  });
+  const gx=LW-60;
+  if(P.x+8>gx&&P.x<gx+14&&state=='play'){
+    if(got>=N){state='won';for(let i=0;i<140;i++)conf.push({x:Math.random()*256,y:-Math.random()*144,vy:.6+Math.random()*1.2,vx:(Math.random()-.5)*.6,c:['#ffd84a','#ff7a5c','#7fd6ff','#ffffff','#ff9ad5'][i%5]});beep(660,.15);setTimeout(()=>beep(880,.15),150);setTimeout(()=>beep(1320,.3),300);setTimeout(()=>document.getElementById('win').classList.remove('hide'),1600)}
+    else{P.x=gx-10;toast('Collect all '+N+' shells to unlock the gift! ('+got+'/'+N+')')}
+  }
+  cam=Math.max(0,Math.min(LW-256,P.x-100));
+}
+
+// ---------- draw ----------
+function draw(){
+  const t=f/60,cx=Math.round(cam);
+  ['#5b4f94','#a9608f','#e9806c','#f6ae6b','#fbd89b'].forEach((c,i)=>rect(c,0,i*14,256,15));
+  const sx=170-cam*.05;rect('#fff1c4',0,0,0,0);ctx.fillStyle='#fff1c4';
+  for(let d=-13;d<=13;d++){const w=Math.floor(Math.sqrt(169-d*d));ctx.fillRect(Math.round(sx-w),62+d,w*2,1)}
+  for(let i=0;i<6;i++){const q=((i*150-cam*.2+t*4)%420+420)%420-60;rect('rgba(255,225,190,.8)',q,16+i%3*14,26,3);rect('rgba(255,225,190,.8)',q+5,13+i%3*14,14,3)}
+  rect('#3b86a0',0,70,256,8);rect('#2c6486',0,78,256,42);
+  for(let r=0;r<8;r++)for(let k=0;k<8;k++){const xx=((k*44+r*17-cam*.3+t*(6+r*2))%352+352)%352-30;rect('rgba(255,230,190,.45)',xx,74+r*6,12+r,1)}
+  for(let i=0;i<9;i++){const px=Math.round(90+i*420-cx),c1=['#e4574c','#f2b640','#3c9ad6'][i%3];if(px>-40&&px<290){rect('#d8d2c8',px,G-26,1,26);rect(c1,px-4,G-34,9,2);rect('#f6efe6',px-8,G-32,17,2);rect(c1,px-11,G-30,23,2);rect('#f6efe6',px-11,G-28,3,1);rect('#f6efe6',px+9,G-28,3,1);{const cp=i%2?px-28:px+16;rect(c1,i%2?cp+9:cp,G-13,3,8);rect(c1,cp,G-6,12,2);rect('#8a5a3a',cp+1,G-4,1,4);rect('#8a5a3a',cp+10,G-4,1,4)}}}
+  for(let k=0;k<20;k++)rect('rgba(255,255,255,.7)',((k*14+t*10)%256),G-2+Math.sin(t*2+k)*1,5,1);
+  rect('#e8c27a',0,G,256,24);rect('#d4a35c',0,G,256,2);
+  for(let k=0;k<24;k++)rect('#caa05a',((k*37-cx)%256+256)%256,G+6+(k*7)%14,2,1);
+  plats.slice(1).forEach(p=>{const x=p.x-cx;if(x>-60&&x<260){rect('#8a5a3a',x,p.y,p.w,5);rect('#b07a4f',x,p.y,p.w,1);rect('#5e3b25',x,p.y+4,p.w,1)}});
+  stars.forEach(s=>{if(!s.got)spr(STAR,s.x-cx,s.y+Math.sin(t*3+s.ph)*2)});
+  crabs.forEach(c=>{if(!c.alive)return;const x=c.x-cx,l=Math.floor(f/10)%2;rect('#d9443a',x+1,G-5,8,4);rect('#ff7a5c',x+2,G-5,6,1);rect('#fff',x+2,G-7,2,2);rect('#fff',x+6,G-7,2,2);rect('#1c1416',x+3,G-6,1,1);rect('#1c1416',x+7,G-6,1,1);rect('#d9443a',x-(l?1:0),G-4,2,2);rect('#d9443a',x+9-(l?0:1),G-4,2,2)});
+  // gift
+  const gx=LW-60-cx,un=got>=N;
+  rect(un?'#d9443a':'#7a7a86',gx,G-14,14,14);rect(un?'#ff7a5c':'#9a9aa6',gx,G-14,14,3);rect(un?'#ffd84a':'#5a5a66',gx+6,G-14,2,14);rect(un?'#ffd84a':'#5a5a66',gx,G-8,14,2);
+  if(un){rect('#ffd84a',gx+3,G-18,4,4);rect('#ffd84a',gx+8,G-18,4,4);const sp=Math.sin(t*6)>0;rect('#fff',gx-4,G-20+(sp?2:0),2,2);rect('#fff',gx+17,G-12-(sp?2:0),2,2)}
+  else{rect('#ffd84a',gx+5,G-9,4,4);rect('#3b2a1a',gx+6,G-8,2,2)}
+  // hero
+  if(!(P.hurt&&Math.floor(f/4)%2)){
+    const walk=P.ground&&(keys.l||keys.r)?Math.floor(f/6)%2:0,leg=P.ground?LEG[walk]:LEG[1],fl=P.face<0;
+    spr(HERO.concat(leg),P.x-1-cx,P.y,fl);
+  }
+  conf.forEach(c=>{c.y+=c.vy;c.x+=c.vx;if(c.y>144)c.y=-4;rect(c.c,c.x,c.y,2,2)});
+}
+function loop(){if(state=='play'||state=='won'){update()}draw();requestAnimationFrame(loop)}
+function begin(){state='play'}
+document.getElementById('play').onclick=()=>{try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(_){}document.getElementById('start').classList.add('hide');begin()};
+document.getElementById('again').onclick=()=>{document.getElementById('win').classList.add('hide');reset();begin()};
+document.getElementById('retry').onclick=()=>{document.getElementById('over').classList.add('hide');reset();begin()};
+reset();loop();
+</script>
+</body>
+</html>
